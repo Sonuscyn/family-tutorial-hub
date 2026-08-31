@@ -23,6 +23,7 @@ export function TutorialDetail() {
   const { user } = useAuth();
   const { settings } = useSettings();
   const [showDelete, setShowDelete] = useState(false);
+  const [deleteIsOwn, setDeleteIsOwn] = useState(false);
   const [adminPwd, setAdminPwd] = useState("");
   const [pwdError, setPwdError] = useState(false);
 
@@ -65,12 +66,19 @@ export function TutorialDetail() {
     setLearned((arr) => arr.map((v, i) => (i === current ? !v : v)));
 
   const handleDelete = () => {
-    if (adminPwd === settings.password) {
-      deleteUserTutorial(tutorial.id);
-      navigate("/browse");
-    } else {
+    if (!deleteIsOwn && adminPwd !== settings.password) {
       setPwdError(true);
+      return;
     }
+    deleteUserTutorial(tutorial.id);
+    navigate("/browse");
+  };
+
+  const requestDelete = () => {
+    setDeleteIsOwn(!!user && isUserTutorial(tutorial) && tutorial.userId === user.id);
+    setAdminPwd("");
+    setPwdError(false);
+    setShowDelete(true);
   };
 
   const addComment = () => {
@@ -118,17 +126,17 @@ export function TutorialDetail() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             {isMine && (
-              <>
-                <Link to={`/upload?edit=${tutorial.id}`} className="btn-ghost px-3 py-2.5 text-sm">
-                  <Edit3 className="h-4 w-4" /> 编辑
-                </Link>
-                <button
-                  onClick={() => setShowDelete(true)}
-                  className="rounded-full px-3 py-2.5 text-sm text-[#e07a5f] transition hover:bg-[#e07a5f]/8"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </>
+              <Link to={`/upload?edit=${tutorial.id}`} className="btn-ghost px-3 py-2.5 text-sm">
+                <Edit3 className="h-4 w-4" /> 编辑
+              </Link>
+            )}
+            {isUserTutorial(tutorial) && user && (
+              <button
+                onClick={requestDelete}
+                className="rounded-full px-3 py-2.5 text-sm text-[#e07a5f] transition hover:bg-[#e07a5f]/8"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             )}
             <button
               onClick={() => setSaved((v) => !v)}
@@ -289,17 +297,19 @@ export function TutorialDetail() {
             </div>
             <p className="text-lg font-bold text-ink">删除这篇教程？</p>
             <p className="mt-1 text-sm text-ink-muted">删除后不能恢复哦</p>
-            <div className="mt-4">
-              <input
-                type="password"
-                value={adminPwd}
-                onChange={e => { setAdminPwd(e.target.value); setPwdError(false); }}
-                placeholder="输入管理员密码"
-                className="field text-center text-sm"
-                autoFocus
-              />
-              {pwdError && <p className="mt-1.5 text-xs text-[#e07a5f]">管理员密码不对</p>}
-            </div>
+            {!deleteIsOwn && (
+              <div className="mt-4">
+                <input
+                  type="password"
+                  value={adminPwd}
+                  onChange={e => { setAdminPwd(e.target.value); setPwdError(false); }}
+                  placeholder="输入管理员密码"
+                  className="field text-center text-sm"
+                  autoFocus
+                />
+                {pwdError && <p className="mt-1.5 text-xs text-[#e07a5f]">管理员密码不对</p>}
+              </div>
+            )}
             <div className="mt-5 flex gap-3">
               <button
                 onClick={() => { setShowDelete(false); setAdminPwd(""); setPwdError(false); }}
