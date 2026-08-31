@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import { getSupabase, isSupabaseReady } from "../lib/supabase";
 import { scheduleGiteeBackup as scheduleBackup } from "../lib/giteeSync";
+import { isCosReady, uploadImageFromBase64 } from "../lib/cosUpload";
 
 interface CirclePost {
   id: string;
@@ -167,7 +168,15 @@ export function Circle() {
     if (!files.length) return;
     const remaining = 9 - images.length;
     const toAdd = files.slice(0, remaining);
-    const urls = await Promise.all(toAdd.map(fileToDataUrl));
+    const dataUrls = await Promise.all(toAdd.map(fileToDataUrl));
+    const cosReady = isCosReady();
+    const urls = await Promise.all(dataUrls.map(async (dataUrl) => {
+      if (cosReady) {
+        const cosUrl = await uploadImageFromBase64(dataUrl);
+        if (cosUrl) return cosUrl;
+      }
+      return dataUrl;
+    }));
     setImages(prev => [...prev, ...urls]);
     e.target.value = "";
   };

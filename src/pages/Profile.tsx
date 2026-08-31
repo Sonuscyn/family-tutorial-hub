@@ -9,6 +9,7 @@ import { LogoMark } from "../components/Miffy";
 import { useSettings } from "../lib/settings";
 import { useAuth } from "../lib/auth";
 import { loadDrafts, deleteDraft, type TutorialDraft } from "../lib/drafts";
+import { isCosReady, uploadImageFromBase64 } from "../lib/cosUpload";
 
 interface BoardMessage {
   id: string;
@@ -74,8 +75,17 @@ export function Profile() {
     const f = e.target.files?.[0];
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      updateProfile({ avatar: reader.result as string });
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      if (isCosReady()) {
+        const cosUrl = await uploadImageFromBase64(dataUrl);
+        if (cosUrl) {
+          updateProfile({ avatar: cosUrl });
+          setAvatarInput("");
+          return;
+        }
+      }
+      updateProfile({ avatar: dataUrl });
       setAvatarInput("");
     };
     reader.readAsDataURL(f);

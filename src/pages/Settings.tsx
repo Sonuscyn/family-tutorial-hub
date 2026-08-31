@@ -26,6 +26,7 @@ import {
   getToken as getGiteeToken, getOwner, getRepo,
   setGiteeConfig, clearGiteeConfig,
 } from "../lib/giteeSync";
+import { isCosReady, setCosConfig, clearCosConfig, getSid, getSkey, getBucket, getRegion } from "../lib/cosUpload";
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -357,6 +358,10 @@ export function Settings() {
 
         <Section icon={<Cloud className="h-4 w-4" />} title="实时同步（Gitee）">
           <GiteeSyncConfig />
+        </Section>
+
+        <Section icon={<ImageIcon className="h-4 w-4" />} title="图片视频存储（腾讯云 COS）">
+          <CosConfig />
         </Section>
 
         <Section icon={<Cloud className="h-4 w-4" />} title="手动备份（GitHub）">
@@ -953,6 +958,124 @@ function GithubAutoBackup() {
       </div>
       {!hasTok && (
         <p className="text-xs text-[#B07090]">需要先在上方「手动备份（GitHub）」里填入 Token。</p>
+      )}
+    </div>
+  );
+}
+
+/* ===== COS Config ===== */
+function CosConfig() {
+  const [sid, setSid] = useState(getSid());
+  const [skey, setSkey] = useState(getSkey());
+  const [bucket, setBucket] = useState(getBucket());
+  const [region, setRegion] = useState(getRegion());
+  const [ready, setReady] = useState(isCosReady());
+  const [msg, setMsg] = useState("");
+
+  const inputCls = "w-full rounded-xl border border-[#C45A7A]/15 bg-white/70 px-3 py-2 text-sm text-[#8B3A5A] outline-none focus:border-[#C45A7A]/40";
+
+  const save = () => {
+    setCosConfig(sid.trim(), skey.trim(), bucket.trim(), region.trim());
+    setReady(isCosReady());
+    setMsg("配置已保存 ✓");
+    setTimeout(() => setMsg(""), 3000);
+  };
+
+  const clear = () => {
+    clearCosConfig();
+    setReady(false);
+    setSid("");
+    setSkey("");
+    setBucket("");
+    setRegion("");
+    setMsg("配置已清除");
+    setTimeout(() => setMsg(""), 3000);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-xl bg-[#FFF0F5] p-3 text-xs text-[#8B3A5A]">
+        <ImageIcon className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p>图片和视频存到腾讯云COS，免费50GB（6个月），国内直连秒开。</p>
+          <p className="mt-1 text-[#B07090]">
+            注册后需要：1. 创建存储桶 2. 设置CORS允许跨域 3. 获取SecretId/SecretKey
+          </p>
+        </div>
+      </div>
+
+      {ready ? (
+        <p className="flex items-center gap-1.5 text-sm text-green-600">
+          <Check className="h-4 w-4" /> 已配置
+        </p>
+      ) : (
+        <p className="flex items-center gap-1.5 text-sm text-gray-400">
+          <span className="h-4 w-4 rounded-full border-2 border-gray-300" /> 未配置
+        </p>
+      )}
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">SecretId</label>
+        <input
+          type="text"
+          value={sid}
+          onChange={e => setSid(e.target.value)}
+          placeholder="腾讯云 SecretId"
+          className={inputCls}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">SecretKey</label>
+        <input
+          type="password"
+          value={skey}
+          onChange={e => setSkey(e.target.value)}
+          placeholder="腾讯云 SecretKey"
+          className={inputCls}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">存储桶名（Bucket）</label>
+        <input
+          type="text"
+          value={bucket}
+          onChange={e => setBucket(e.target.value)}
+          placeholder="例如：family-tutorial-1234567890"
+          className={inputCls}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">地域（Region）</label>
+        <input
+          type="text"
+          value={region}
+          onChange={e => setRegion(e.target.value)}
+          placeholder="例如：ap-guangzhou"
+          className={inputCls}
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          onClick={save}
+          disabled={!sid.trim() || !skey.trim() || !bucket.trim() || !region.trim()}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C45A7A] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#A04068] disabled:opacity-40"
+        >
+          <Cloud className="h-4 w-4" /> 保存
+        </button>
+        <button
+          onClick={clear}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C45A7A]/10 px-4 py-2.5 text-sm font-medium text-[#C45A7A] transition hover:bg-[#C45A7A]/20"
+        >
+          <X className="h-4 w-4" /> 清除
+        </button>
+      </div>
+
+      {msg && (
+        <p className={`text-sm ${msg.includes("✓") ? "text-green-600" : "text-[#e07a5f]"}`}>{msg}</p>
       )}
     </div>
   );

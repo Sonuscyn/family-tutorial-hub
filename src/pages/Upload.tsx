@@ -7,6 +7,7 @@ import { useSettings } from "../lib/settings";
 import { useAuth } from "../lib/auth";
 import { loadDrafts, saveDraft, deleteDraft, type TutorialDraft, type DraftStep } from "../lib/drafts";
 import { addUserTutorial, getUserTutorial, buildStepsFromDraft, type UserTutorial } from "../lib/tutorialStore";
+import { isCosReady, uploadImageFromBase64, uploadFile, uploadVideo } from "../lib/cosUpload";
 
 const emptyStep = (): DraftStep => ({
   id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -17,6 +18,14 @@ const emptyStep = (): DraftStep => ({
 });
 
 const wizard = ["基本信息", "添加步骤", "预览发布"];
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 export function Upload() {
   const { settings } = useSettings();
@@ -60,19 +69,61 @@ export function Upload() {
     }
   }, [editId]);
 
-  const pickFile = (cb: (url: string) => void, accept = "image/*") => {
+  const pickFile = (cb: (file: File) => void, accept = "image/*") => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = accept;
     input.onchange = () => {
       const f = input.files?.[0];
-      if (f) cb(URL.createObjectURL(f));
+      if (f) cb(f);
     };
     input.click();
   };
 
   const updateStep = (id: string, patch: Partial<DraftStep>) =>
     setSteps(arr => arr.map(s => (s.id === id ? { ...s, ...patch } : s)));
+
+  // upload cover image to COS or fall back to base64
+  const handleCoverImage = async (file: File) => {
+    const dataUrl = await fileToDataUrl(file);
+    if (isCosReady()) {
+      const cosUrl = await uploadImageFromBase64(dataUrl);
+      setCover(cosUrl ?? dataUrl);
+    } else {
+      setCover(dataUrl);
+    }
+  };
+
+  // upload cover video to COS or fall back to object URL
+  const handleCoverVideo = async (file: File) => {
+    if (isCosReady()) {
+      const cosUrl = await uploadVideo(file);
+      setCoverVideo(cosUrl ?? URL.createObjectURL(file));
+    } else {
+      setCoverVideo(URL.createObjectURL(file));
+    }
+  };
+
+  // upload step image to COS or fall back to base64
+  const handleStepImage = async (id: string, file: File) => {
+    const dataUrl = await fileToDataUrl(file);
+    if (isCosReady()) {
+      const cosUrl = await uploadImageFromBase64(dataUrl);
+      updateStep(id, { img: cosUrl ?? dataUrl });
+    } else {
+      updateStep(id, { img: dataUrl });
+    }
+  };
+
+  // upload step video to COS or fall back to object URL
+  const handleStepVideo = async (id: string, file: File) => {
+    if (isCosReady()) {
+      const cosUrl = await uploadVideo(file);
+      updateStep(id, { video: cosUrl ?? URL.createObjectURL(file) });
+    } else {
+      updateStep(id, { video: URL.createObjectURL(file) });
+    }
+  };
 
   const canNext =
     step === 0 ? title.trim() : step === 1 ? steps.length && steps.every(s => s.text.trim()) : true;
@@ -253,7 +304,7 @@ export function Upload() {
               <label className="mb-2 block text-sm font-medium text-ink">封面（可选）</label>
               <div className="flex gap-3">
                 <button
-                  onClick={() => pickFile(setCover)}
+                  onClick={() => pickFile(handleCoverImage)}
                   className="upload-zone h-44 flex-1"
                 >
                   {cover ? (
@@ -278,7 +329,7 @@ export function Upload() {
               <label className="mb-2 block text-sm font-medium text-ink">封面视频（可选）</label>
               <div className="flex gap-3">
                 <button
-                  onClick={() => pickFile(setCoverVideo, "video/*")}
+                  onClick={() => pickFile(handleCoverVideo, "video/*")}
                   className="upload-zone h-32 flex-1"
                 >
                   {coverVideo ? (
@@ -344,7 +395,7 @@ export function Upload() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
                   <div className="flex flex-col gap-2">
-                    <button onClick={() => pickFile(u => updateStep(s.id, { img: u }))} className="upload-zone h-28">
+                    <button onClick={() => pickFile(f => handleStepImage(s.id, f))} className="upload-zone h-28">
                       {s.img ? (
                         <img src={s.img} alt="步骤图" className="h-full w-full rounded-2xl object-cover" />
                       ) : (
@@ -354,7 +405,7 @@ export function Upload() {
                         </div>
                       )}
                     </button>
-                    <button onClick={() => pickFile(u => updateStep(s.id, { video: u }), "video/*")} className="upload-zone h-20">
+                    <button onClick={() => pickFile(f => handleStepVideo(s.id, f), "video/*")} className="upload-zone h-20">
                       {s.video ? (
                         <video src={s.video} controls className="h-full w-full rounded-2xl object-cover" />
                       ) : (
