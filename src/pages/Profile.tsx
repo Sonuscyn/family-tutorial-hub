@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BookOpen, Heart, HelpCircle, ArrowRight, CheckCircle2, ChevronDown, MessageCircle, Send, FileText, Edit3, Camera, LogOut, Check } from "lucide-react";
-import { tutorials, members } from "../data/tutorials";
+import { tutorials } from "../data/tutorials";
+import { loadUserTutorials } from "../lib/tutorialStore";
 import { TutorialCard } from "../components/TutorialCard";
 import { Avatar } from "../components/Avatar";
 import { LogoMark } from "../components/Miffy";
@@ -46,9 +47,12 @@ export function Profile() {
     );
   }
 
-  const learned = tutorials.filter(t => members[0].learned.includes(t.id));
-  const saved = tutorials.filter(t => members[0].saved.includes(t.id));
-  const pending = tutorials
+  const allTutorials = [...loadUserTutorials(), ...tutorials];
+  const learnedIds: string[] = JSON.parse(localStorage.getItem(`fth_learned_${user.id}`) || "[]");
+  const savedIds: string[] = JSON.parse(localStorage.getItem(`fth_saved_${user.id}`) || "[]");
+  const learned = allTutorials.filter(t => learnedIds.includes(t.id));
+  const saved = allTutorials.filter(t => savedIds.includes(t.id));
+  const pending = allTutorials
     .flatMap(t => t.comments
       .filter(c => c.author === user.name && c.replies.length === 0)
       .map(c => ({ tutorial: t, comment: c })));

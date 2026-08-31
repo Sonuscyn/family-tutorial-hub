@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowLeft, Lock, Image as ImageIcon, Type, Palette, Check, RotateCcw,
   Upload, Eye, EyeOff, X, MessageSquare, Home, Tag, KeyRound, Plus,
+  Cloud, Download, Loader2, ShieldAlert,
 } from "lucide-react";
 import {
   Miffy, HeroAvatar, LogoMark,
@@ -12,6 +13,10 @@ import {
   decorationOptions, decorationColors,
   type CharacterType, type DecorationType,
 } from "../lib/settings";
+import {
+  hasToken, setToken as saveGhToken, getToken,
+  backupToGitHub, restoreFromGitHub,
+} from "../lib/githubSync";
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -336,6 +341,11 @@ export function Settings() {
           <PasswordEditor settings={settings} update={update} flashSaved={flashSaved} />
         </Section>
 
+        {/* ===== Data Sync ===== */}
+        <Section icon={<Cloud className="h-4 w-4" />} title="数据备份与恢复">
+          <DataSync />
+        </Section>
+
         {/* reset */}
         <div className="mt-8 text-center">
           <button
@@ -609,5 +619,98 @@ function PasswordEditor({ settings, update, flashSaved }: {
         确认修改
       </button>
     </form>
+  );
+}
+
+/* ===== Data Sync Component ===== */
+function DataSync() {
+  const [tokenInput, setTokenInput] = useState(getToken());
+  const [syncing, setSyncing] = useState<"backup" | "restore" | null>(null);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  const tokenSaved = hasToken();
+
+  const saveToken = () => {
+    saveGhToken(tokenInput.trim());
+    setMsg("Token 已保存 ✓");
+    setErr("");
+    setTimeout(() => setMsg(""), 2000);
+  };
+
+  const doBackup = async () => {
+    setSyncing("backup");
+    setMsg(""); setErr("");
+    const r = await backupToGitHub();
+    setSyncing(null);
+    if (r.ok) { setMsg("备份成功！数据已存到 GitHub ✓"); }
+    else { setErr(r.error || "备份失败"); }
+    setTimeout(() => { setMsg(""); setErr(""); }, 3000);
+  };
+
+  const doRestore = async () => {
+    if (!confirm("从 GitHub 恢复数据会覆盖当前的本地数据，确定吗？")) return;
+    setSyncing("restore");
+    setMsg(""); setErr("");
+    const r = await restoreFromGitHub();
+    setSyncing(null);
+    if (r.ok) {
+      setMsg("恢复成功！正在刷新页面…");
+      setTimeout(() => window.location.reload(), 1200);
+    } else { setErr(r.error || "恢复失败"); }
+    setTimeout(() => setErr(""), 3000);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-xl bg-[#FFF0F5] p-3 text-xs text-[#8B3A5A]">
+        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>备份数据存到 GitHub 仓库里，重新部署也不怕丢。Token 只存在本机浏览器，不会上传。</p>
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">GitHub Token</label>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={tokenInput}
+            onChange={e => setTokenInput(e.target.value)}
+            placeholder="ghp_..."
+            className="flex-1 rounded-xl border border-[#C45A7A]/15 bg-white/70 px-3 py-2 text-sm text-[#8B3A5A] outline-none focus:border-[#C45A7A]/40"
+          />
+          <button
+            onClick={saveToken}
+            className="shrink-0 rounded-full bg-[#C45A7A]/10 px-4 py-2 text-sm text-[#C45A7A] transition hover:bg-[#C45A7A]/20"
+          >
+            保存
+          </button>
+        </div>
+        {tokenSaved && (
+          <p className="mt-1 text-xs text-[#B07090]">Token 已保存</p>
+        )}
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          onClick={doBackup}
+          disabled={!tokenSaved || syncing !== null}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C45A7A] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#A04068] disabled:opacity-40"
+        >
+          {syncing === "backup" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+          备份到 GitHub
+        </button>
+        <button
+          onClick={doRestore}
+          disabled={!tokenSaved || syncing !== null}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C45A7A]/10 px-4 py-2.5 text-sm font-medium text-[#C45A7A] transition hover:bg-[#C45A7A]/20 disabled:opacity-40"
+        >
+          {syncing === "restore" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          从 GitHub 恢复
+        </button>
+      </div>
+
+      {msg && <p className="text-sm text-green-600">{msg}</p>}
+      {err && <p className="text-sm text-[#e07a5f]">{err}</p>}
+    </div>
   );
 }

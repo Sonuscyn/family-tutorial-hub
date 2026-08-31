@@ -30,26 +30,16 @@ const avatarColors = [
   "#C45A7A", "#4A7BB5", "#8A6CB5", "#4A9D7E",
 ];
 
-function defaultUsers(): FamilyUser[] {
-  return [
-    { id: "m1", name: "妈妈", avatar: "", avatarColor: "#E08A2A", password: "0000", bio: "家里的大厨", joinDate: "2026-08-01" },
-    { id: "m2", name: "外婆", avatar: "", avatarColor: "#D4B896", password: "0000", bio: "长辈", joinDate: "2026-08-01" },
-    { id: "m3", name: "小妹", avatar: "", avatarColor: "#A8B89A", password: "0000", bio: "女儿", joinDate: "2026-08-01" },
-  ];
-}
-
 function loadUsers(): FamilyUser[] {
   try {
     const raw = localStorage.getItem(USERS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch { /* noop */ }
-  // first time — seed defaults
-  const defaults = defaultUsers();
-  try { localStorage.setItem(USERS_KEY, JSON.stringify(defaults)); } catch { /* noop */ }
-  return defaults;
+  try { localStorage.setItem(USERS_KEY, JSON.stringify([])); } catch { /* noop */ }
+  return [];
 }
 
 function saveUsers(users: FamilyUser[]) {
