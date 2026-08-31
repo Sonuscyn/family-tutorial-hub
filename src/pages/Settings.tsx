@@ -21,10 +21,10 @@ import {
   getSupabaseConfig, setSupabaseConfig, isSupabaseReady, SQL_SCHEMA,
 } from "../lib/supabase";
 import {
-  isLeanReady, startLeanSync, stopLeanSync,
-  getLeanId, getLeanKey, getLeanServer,
-  setLeanConfig, clearLeanConfig,
-} from "../lib/leanSync";
+  isQiniuReady, startQiniuSync, stopQiniuSync,
+  getAK, getSK, getBucket, getDomain,
+  setQiniuConfig, clearQiniuConfig,
+} from "../lib/qiniuSync";
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -354,8 +354,8 @@ export function Settings() {
           <SupabaseConfig />
         </Section>
 
-        <Section icon={<Cloud className="h-4 w-4" />} title="实时同步（LeanCloud）">
-          <LeanSyncConfig />
+        <Section icon={<Cloud className="h-4 w-4" />} title="实时同步（七牛云）">
+          <QiniuSyncConfig />
         </Section>
 
         <Section icon={<Cloud className="h-4 w-4" />} title="手动备份（GitHub）">
@@ -807,33 +807,35 @@ function SupabaseConfig() {
   );
 }
 
-/* ===== LeanCloud Sync Config ===== */
-function LeanSyncConfig() {
-  const [appId, setAppId] = useState(getLeanId());
-  const [appKey, setAppKey] = useState(getLeanKey());
-  const [server, setServer] = useState(getLeanServer());
-  const [running, setRunning] = useState(isLeanReady());
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
+/* ===== Qiniu Sync Config ===== */
+function QiniuSyncConfig() {
+  const [ak, setAk] = useState(getAK());
+  const [sk, setSk] = useState(getSK());
+  const [bucket, setBucket] = useState(getBucket());
+  const [domain, setDomain] = useState(getDomain());
+  const [running, setRunning] = useState(isQiniuReady());
+  const [msg, setMsg] = useState("");
 
-  const handleSave = () => {
-    setError("");
-    if (!appId.trim() || !appKey.trim()) {
-      setError("App ID 和 App Key 都不能为空");
-      return;
-    }
-    setLeanConfig(appId.trim(), appKey.trim(), server.trim());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const inputCls = "w-full rounded-xl border border-[#C45A7A]/15 bg-white/70 px-3 py-2 text-sm text-[#8B3A5A] outline-none focus:border-[#C45A7A]/40";
+
+  const save = () => {
+    setQiniuConfig(ak.trim(), sk.trim(), bucket.trim(), domain.trim());
+    startQiniuSync();
     setRunning(true);
-    startLeanSync();
+    setMsg("配置已保存，实时同步已开启 ✓");
+    setTimeout(() => setMsg(""), 3000);
   };
 
-  const handleClear = () => {
-    clearLeanConfig();
-    setAppId(""); setAppKey(""); setServer("");
+  const clear = () => {
+    clearQiniuConfig();
+    stopQiniuSync();
     setRunning(false);
-    stopLeanSync();
+    setAk("");
+    setSk("");
+    setBucket("");
+    setDomain("");
+    setMsg("配置已清除，同步已停止");
+    setTimeout(() => setMsg(""), 3000);
   };
 
   return (
@@ -841,69 +843,81 @@ function LeanSyncConfig() {
       <div className="flex items-start gap-2 rounded-xl bg-[#FFF0F5] p-3 text-xs text-[#8B3A5A]">
         <Cloud className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <p>配置后，家人在不同手机上发的动态、教程、设置会自动实时同步（30秒检查一次，国内可直连）。</p>
+          <p>七牛云免费 10GB 存储，30 秒同步一次，国内直连速度快。</p>
           <p className="mt-1 text-[#B07090]">
-            注册 LeanCloud：打开 https://leancloud.cn 注册 → 创建应用 →
-            设置 → 应用凭证 → 复制 AppID、AppKey、服务器地址
+            注册：https://www.qiniu.com → 完成实名认证 → 创建公开空间（Bucket） → 在「密钥管理」获取 AK / SK。
           </p>
         </div>
       </div>
 
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">App ID</label>
-        <input
-          value={appId}
-          onChange={(e) => setAppId(e.target.value)}
-          placeholder="如 kPXXX..."
-          className="field text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">App Key</label>
-        <input
-          value={appKey}
-          onChange={(e) => setAppKey(e.target.value)}
-          placeholder="如 9VXXX..."
-          className="field text-sm"
-        />
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">服务器地址（可选）</label>
-        <input
-          value={server}
-          onChange={(e) => setServer(e.target.value)}
-          placeholder="如 https://xxx.lc-ea.shared.com"
-          className="field text-sm"
-        />
-        <p className="mt-1 text-xs text-[#B07090]">国内节点填 https://xxx.lc-ea.shared.com；海外节点可留空</p>
-      </div>
-
-      {error && <p className="text-sm text-[#e07a5f]">{error}</p>}
-      {saved && <p className="text-sm text-green-600">已保存并开启同步</p>}
-
-      <div className="flex gap-2">
-        <button
-          onClick={handleSave}
-          className="flex items-center gap-2 rounded-full bg-[#C45A7A] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#A0486A]"
-        >
-          <Check className="h-4 w-4" /> 保存并开启
-        </button>
-        {running && (
-          <button
-            onClick={handleClear}
-            className="flex items-center gap-2 rounded-full bg-[#e07a5f]/10 px-5 py-2.5 text-sm font-medium text-[#e07a5f] transition hover:bg-[#e07a5f]/20"
-          >
-            <X className="h-4 w-4" /> 清除配置
-          </button>
-        )}
-      </div>
-
       {running && (
-        <p className="text-xs text-green-600">
-          同步已开启 · 每30秒检查更新 · 有改动3秒后自动推送
+        <p className="flex items-center gap-1.5 text-sm text-green-600">
+          <Check className="h-4 w-4" /> 实时同步已开启 · 每 30 秒自动同步
         </p>
+      )}
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">AccessKey (AK)</label>
+        <input
+          type="text"
+          value={ak}
+          onChange={e => setAk(e.target.value)}
+          placeholder="七牛云 AccessKey"
+          className={inputCls}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">SecretKey (SK)</label>
+        <input
+          type="password"
+          value={sk}
+          onChange={e => setSk(e.target.value)}
+          placeholder="七牛云 SecretKey"
+          className={inputCls}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">空间名称（Bucket）</label>
+        <input
+          type="text"
+          value={bucket}
+          onChange={e => setBucket(e.target.value)}
+          placeholder="例如：family-tutorial"
+          className={inputCls}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">绑定域名（Domain）</label>
+        <input
+          type="text"
+          value={domain}
+          onChange={e => setDomain(e.target.value)}
+          placeholder="例如：https://cdn.example.com"
+          className={inputCls}
+        />
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          onClick={save}
+          disabled={!ak.trim() || !sk.trim() || !bucket.trim() || !domain.trim()}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C45A7A] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#A04068] disabled:opacity-40"
+        >
+          <Cloud className="h-4 w-4" /> 保存并开启
+        </button>
+        <button
+          onClick={clear}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C45A7A]/10 px-4 py-2.5 text-sm font-medium text-[#C45A7A] transition hover:bg-[#C45A7A]/20"
+        >
+          <X className="h-4 w-4" /> 清除配置
+        </button>
+      </div>
+
+      {msg && (
+        <p className={`text-sm ${msg.includes("✓") ? "text-green-600" : "text-[#e07a5f]"}`}>{msg}</p>
       )}
     </div>
   );

@@ -6,10 +6,7 @@ import { SettingsProvider } from "./lib/settings";
 import { AuthProvider } from "./lib/auth";
 import { syncUserTutorials } from "./lib/tutorialStore";
 import { isSupabaseReady } from "./lib/supabase";
-import {
-  startLeanSync, stopLeanSync, setSyncCallback, scheduleLeanBackup,
-} from "./lib/leanSync";
-import { isLeanReady } from "./lib/leanSync";
+import { startQiniuSync, stopQiniuSync, setSyncCallback, scheduleQiniuBackup, isQiniuReady } from "./lib/qiniuSync";
 import { Landing } from "./pages/Landing";
 import { Home } from "./pages/Home";
 import { Category } from "./pages/Category";
@@ -41,14 +38,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isLeanReady()) {
+    if (isQiniuReady()) {
       setSyncCallback(onSync);
-      startLeanSync();
+      startQiniuSync();
     }
     if (isSupabaseReady()) {
       syncUserTutorials();
     }
-    return () => stopLeanSync();
+    return () => stopQiniuSync();
   }, []);
 
   // re-read on sync tick

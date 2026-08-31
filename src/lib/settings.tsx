@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { scheduleLeanBackup as scheduleBackup } from "./leanSync";
+import { scheduleQiniuBackup as scheduleBackup } from "./qiniuSync";
 
 export type CharacterType = "miffy" | "rilakkuma";
 export type DecorationType = "none" | "crown" | "heart" | "apple";
