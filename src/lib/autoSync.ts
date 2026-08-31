@@ -5,13 +5,34 @@ const REPO_NAME = "family-tutorial-hub";
 const SYNC_FILE = "app-data.json";
 const API_BASE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${SYNC_FILE}`;
 const SYNC_FLAG = "fth_autosync";
+const GITHUB_BACKUP_FLAG = "fth_gh_backup";
 const LAST_SYNC_TIME = "fth_last_sync_time";
 const SYNC_INTERVAL = 120000; // 2 minutes polling
 const PUSH_DEBOUNCE = 5000; // 5 second debounce
+const GITHUB_BACKUP_INTERVAL = 300000; // 5 minutes
 
 let backupTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let githubBackupTimer: ReturnType<typeof setInterval> | null = null;
 let lastContentHash = "";
+
+export function isGithubBackupEnabled(): boolean {
+  try { return localStorage.getItem(GITHUB_BACKUP_FLAG) === "1"; } catch { return false; }
+}
+
+export function setGithubBackupEnabled(enabled: boolean) {
+  try { localStorage.setItem(GITHUB_BACKUP_FLAG, enabled ? "1" : "0"); } catch { /* noop */ }
+}
+
+export function startGithubBackup() {
+  if (!hasToken() || !isGithubBackupEnabled()) return;
+  stopGithubBackup();
+  githubBackupTimer = setInterval(() => { pushToGitHub(); }, GITHUB_BACKUP_INTERVAL);
+}
+
+export function stopGithubBackup() {
+  if (githubBackupTimer) { clearInterval(githubBackupTimer); githubBackupTimer = null; }
+}
 
 export function isAutoSyncEnabled(): boolean {
   try {

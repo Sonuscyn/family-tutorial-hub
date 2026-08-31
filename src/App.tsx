@@ -7,6 +7,8 @@ import { AuthProvider } from "./lib/auth";
 import { syncUserTutorials } from "./lib/tutorialStore";
 import { isSupabaseReady } from "./lib/supabase";
 import { startGiteeSync, stopGiteeSync, setSyncCallback, scheduleGiteeBackup, isGiteeReady } from "./lib/giteeSync";
+import { startGithubBackup, stopGithubBackup, isGithubBackupEnabled } from "./lib/autoSync";
+import { hasToken } from "./lib/githubSync";
 import { Landing } from "./pages/Landing";
 import { Home } from "./pages/Home";
 import { Category } from "./pages/Category";
@@ -42,10 +44,13 @@ export default function App() {
       setSyncCallback(onSync);
       startGiteeSync();
     }
+    if (hasToken() && isGithubBackupEnabled()) {
+      startGithubBackup();
+    }
     if (isSupabaseReady()) {
       syncUserTutorials();
     }
-    return () => stopGiteeSync();
+    return () => { stopGiteeSync(); stopGithubBackup(); };
   }, []);
 
   // re-read on sync tick

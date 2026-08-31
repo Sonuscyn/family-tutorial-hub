@@ -17,6 +17,7 @@ import {
   hasToken, setToken as saveGhToken, getToken,
   backupToGitHub, restoreFromGitHub,
 } from "../lib/githubSync";
+import { isGithubBackupEnabled, setGithubBackupEnabled, startGithubBackup, stopGithubBackup } from "../lib/autoSync";
 import {
   getSupabaseConfig, setSupabaseConfig, isSupabaseReady, SQL_SCHEMA,
 } from "../lib/supabase";
@@ -360,6 +361,10 @@ export function Settings() {
 
         <Section icon={<Cloud className="h-4 w-4" />} title="手动备份（GitHub）">
           <DataSync />
+        </Section>
+
+        <Section icon={<ShieldAlert className="h-4 w-4" />} title="GitHub 自动备份">
+          <GithubAutoBackup />
         </Section>
 
         {/* reset */}
@@ -905,6 +910,49 @@ function GiteeSyncConfig() {
 
       {msg && (
         <p className={`text-sm ${msg.includes("✓") ? "text-green-600" : "text-[#e07a5f]"}`}>{msg}</p>
+      )}
+    </div>
+  );
+}
+
+function GithubAutoBackup() {
+  const [enabled, setEnabled] = useState(isGithubBackupEnabled());
+  const [hasTok, setHasTok] = useState(hasToken());
+
+  const toggle = () => {
+    if (!enabled && !hasTok) {
+      alert("请先在上方「手动备份（GitHub）」里填写 GitHub Token");
+      return;
+    }
+    const next = !enabled;
+    setEnabled(next);
+    setGithubBackupEnabled(next);
+    if (next) startGithubBackup();
+    else stopGithubBackup();
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-[#8a5a6a]">
+        开启后每 5 分钟自动把数据备份到 GitHub 仓库，只推不拉，不会触发风控。
+        配合 Gitee 实时同步使用，双重保障。
+      </p>
+      <div className="flex items-center justify-between rounded-2xl bg-[#C45A7A]/5 p-4">
+        <div className="flex items-center gap-2">
+          <span className={`h-2.5 w-2.5 rounded-full ${enabled && hasTok ? "bg-green-500" : "bg-gray-300"}`} />
+          <span className="text-sm font-medium text-[#8B3A5A]">
+            {enabled && hasTok ? "自动备份已开启 · 每 5 分钟" : "未开启"}
+          </span>
+        </div>
+        <button
+          onClick={toggle}
+          className={`relative h-7 w-12 rounded-full transition ${enabled ? "bg-[#C45A7A]" : "bg-gray-300"}`}
+        >
+          <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition`} style={{ left: enabled ? "22px" : "2px" }} />
+        </button>
+      </div>
+      {!hasTok && (
+        <p className="text-xs text-[#B07090]">需要先在上方「手动备份（GitHub）」里填入 Token。</p>
       )}
     </div>
   );
