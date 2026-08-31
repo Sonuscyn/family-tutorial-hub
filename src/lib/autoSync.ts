@@ -34,10 +34,14 @@ function fromBase64(b64: string): string {
 
 function collectAllData(): Record<string, string> {
   const data: Record<string, string> = {};
+  const excluded = new Set(["fth_gh_token", SYNC_FLAG, "fth_supabase_url", "fth_supabase_anon"]);
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith("fth_") && key !== "fth_gh_token" && key !== SYNC_FLAG && key !== "fth_supabase_url" && key !== "fth_supabase_anon") {
+      if (!key) continue;
+      if (key.startsWith("fth_") && !excluded.has(key)) {
+        data[key] = localStorage.getItem(key) ?? "";
+      } else if (key === "siteSettings") {
         data[key] = localStorage.getItem(key) ?? "";
       }
     }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { scheduleBackup } from "./autoSync";
 
 export type CharacterType = "miffy" | "rilakkuma";
@@ -175,6 +175,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
     return defaultSettings;
   });
+
+  // re-read settings when data is synced from other devices
+  useEffect(() => {
+    const onSync = () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setSettings({ ...defaultSettings, ...parsed });
+        }
+      } catch { /* noop */ }
+    };
+    window.addEventListener("fth-data-synced", onSync);
+    return () => window.removeEventListener("fth-data-synced", onSync);
+  }, []);
 
   const update = (partial: Partial<SiteSettings>) => {
     setSettings((prev) => {
