@@ -87,22 +87,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return all.find(u => u.id === id) ?? null;
   });
 
-  // load from Supabase + subscribe
+  // load from Supabase + subscribe (gracefully degrade if unreachable)
   useEffect(() => {
     if (!sb || !isSupabaseReady()) return;
     let mounted = true;
 
-    sb.from("members").select("*").then(({ data }: any) => {
-      if (!mounted || !data) return;
-      const mapped: FamilyUser[] = data.map(mapRow);
-      setUsers(mapped);
-      saveLocal(mapped);
-      const cid = loadCurrentId();
-      if (cid) {
-        const found = mapped.find(u => u.id === cid);
-        if (found) setUser(found);
-      }
-    });
+    (async () => {
+      try {
+        const { data } = await sb.from("members").select("*");
+        if (!mounted || !data) return;
+        const mapped: FamilyUser[] = data.map(mapRow);
+        setUsers(mapped);
+        saveLocal(mapped);
+        const cid = loadCurrentId();
+        if (cid) {
+          const found = mapped.find(u => u.id === cid);
+          if (found) setUser(found);
+        }
+      } catch { /* Supabase unreachable, use localStorage */ }
+    })();
 
     const channel = sb
       .channel("members_changes")

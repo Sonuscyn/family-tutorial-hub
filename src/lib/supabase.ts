@@ -37,7 +37,10 @@ export function getSupabase(): SupabaseClient | null {
   if (client && url === currentUrl && anonKey === currentAnon) return client;
   currentUrl = url;
   currentAnon = anonKey;
-  client = createClient(url, anonKey);
+  client = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { params: { eventsPerSecond: 1 } },
+  });
   return client;
 }
 

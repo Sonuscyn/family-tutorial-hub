@@ -97,15 +97,17 @@ export function Circle() {
     let mounted = true;
 
     // initial load
-    sb.from("circle_posts")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }: any) => {
+    (async () => {
+      try {
+        const { data } = await sb.from("circle_posts")
+          .select("*")
+          .order("created_at", { ascending: false });
         if (!mounted || !data) return;
         const mapped = data.map(mapRow);
         setPosts(mapped);
         saveLocal(mapped);
-      });
+      } catch { /* Supabase unreachable, use localStorage */ }
+    })();
 
     // subscribe to changes
     const channel = sb
