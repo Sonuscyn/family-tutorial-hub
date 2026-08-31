@@ -1,9 +1,10 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { getSupabase, isSupabaseReady } from "./supabase";
 
 export interface FamilyUser {
   id: string;
   name: string;
-  avatar: string;         // data URL or empty
+  avatar: string;
   avatarColor: string;
   password: string;
   bio: string;
@@ -30,19 +31,15 @@ const avatarColors = [
   "#C45A7A", "#4A7BB5", "#8A6CB5", "#4A9D7E",
 ];
 
-function loadUsers(): FamilyUser[] {
+function loadLocal(): FamilyUser[] {
   try {
     const raw = localStorage.getItem(USERS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
+    if (raw) return JSON.parse(raw);
   } catch { /* noop */ }
-  try { localStorage.setItem(USERS_KEY, JSON.stringify([])); } catch { /* noop */ }
   return [];
 }
 
-function saveUsers(users: FamilyUser[]) {
+function saveLocal(users: FamilyUser[]) {
   try { localStorage.setItem(USERS_KEY, JSON.stringify(users)); } catch { /* quota */ }
 }
 
@@ -57,19 +54,85 @@ function saveCurrentId(id: string | null) {
   } catch { /* noop */ }
 }
 
+function mapRow(row: any): FamilyUser {
+  return {
+    id: row.id,
+    name: row.name,
+    avatar: row.avatar ?? "",
+    avatarColor: row.avatar_color ?? "#E08A2A",
+    password: row.password ?? "0000",
+    bio: row.bio ?? "",
+    joinDate: row.join_date ?? "",
+  };
+}
+
+function toRow(u: FamilyUser) {
+  return {
+    id: u.id,
+    name: u.name,
+    avatar: u.avatar,
+    avatar_color: u.avatarColor,
+    password: u.password,
+    bio: u.bio,
+    join_date: u.joinDate,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState<FamilyUser[]>(loadUsers);
+  const sb = getSupabase();
+  const [users, setUsers] = useState<FamilyUser[]>(loadLocal);
   const [user, setUser] = useState<FamilyUser | null>(() => {
     const id = loadCurrentId();
-    const all = loadUsers();
+    const all = loadLocal();
     return all.find(u => u.id === id) ?? null;
   });
+
+  // load from Supabase + subscribe
+  useEffect(() => {
+    if (!sb || !isSupabaseReady()) return;
+    let mounted = true;
+
+    sb.from("members").select("*").then(({ data }: any) => {
+      if (!mounted || !data) return;
+      const mapped: FamilyUser[] = data.map(mapRow);
+      setUsers(mapped);
+      saveLocal(mapped);
+      const cid = loadCurrentId();
+      if (cid) {
+        const found = mapped.find(u => u.id === cid);
+        if (found) setUser(found);
+      }
+    });
+
+    const channel = sb
+      .channel("members_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "members" }, (payload: any) => {
+        setUsers((prev: FamilyUser[]) => {
+          if (payload.eventType === "INSERT") {
+            const newRow = mapRow(payload.new);
+            if (prev.some(u => u.id === newRow.id)) return prev;
+            return [...prev, newRow];
+          }
+          if (payload.eventType === "UPDATE") {
+            const updated = mapRow(payload.new);
+            return prev.map(u => u.id === updated.id ? updated : u);
+          }
+          if (payload.eventType === "DELETE") {
+            return prev.filter(u => u.id !== payload.old.id);
+          }
+          return prev;
+        });
+      })
+      .subscribe();
+
+    return () => { mounted = false; sb.removeChannel(channel); };
+  }, [sb]);
 
   const register: AuthContextValue["register"] = (name, password, avatarColor) => {
     if (!name.trim()) return { ok: false, error: "请输入名字" };
     if (password.length < 3) return { ok: false, error: "密码至少 3 位" };
 
-    const all = loadUsers();
+    const all = loadLocal();
     if (all.some(u => u.name === name.trim())) return { ok: false, error: "这个名字已存在" };
 
     const newUser: FamilyUser = {
@@ -83,15 +146,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const next = [...all, newUser];
-    saveUsers(next);
+    saveLocal(next);
     setUsers(next);
     saveCurrentId(newUser.id);
     setUser(newUser);
+
+    if (sb) {
+      sb.from("members").insert(toRow(newUser)).then(() => {});
+    }
     return { ok: true };
   };
 
   const login: AuthContextValue["login"] = (userId, password) => {
-    const all = loadUsers();
+    const all = loadLocal();
     const found = all.find(u => u.id === userId);
     if (!found) return { ok: false, error: "找不到这个成员" };
     if (found.password !== password) return { ok: false, error: "密码不对哦" };
@@ -108,19 +175,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile: AuthContextValue["updateProfile"] = (partial) => {
     if (!user) return;
     const updated = { ...user, ...partial };
-    const all = loadUsers();
+    const all = loadLocal();
     const next = all.map(u => u.id === updated.id ? updated : u);
-    saveUsers(next);
+    saveLocal(next);
     setUsers(next);
     setUser(updated);
+
+    if (sb) {
+      sb.from("members").update(toRow(updated)).eq("id", updated.id).then(() => {});
+    }
   };
 
   const deleteMember: AuthContextValue["deleteMember"] = (id) => {
-    const all = loadUsers();
+    const all = loadLocal();
     const next = all.filter(u => u.id !== id);
-    saveUsers(next);
+    saveLocal(next);
     setUsers(next);
     if (user?.id === id) { saveCurrentId(null); setUser(null); }
+
+    if (sb) {
+      sb.from("members").delete().eq("id", id).then(() => {});
+    }
   };
 
   return (

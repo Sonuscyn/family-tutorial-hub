@@ -17,6 +17,9 @@ import {
   hasToken, setToken as saveGhToken, getToken,
   backupToGitHub, restoreFromGitHub,
 } from "../lib/githubSync";
+import {
+  getSupabaseConfig, setSupabaseConfig, isSupabaseReady, SQL_SCHEMA,
+} from "../lib/supabase";
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -342,7 +345,11 @@ export function Settings() {
         </Section>
 
         {/* ===== Data Sync ===== */}
-        <Section icon={<Cloud className="h-4 w-4" />} title="数据备份与恢复">
+        <Section icon={<Cloud className="h-4 w-4" />} title="数据同步（Supabase）">
+          <SupabaseConfig />
+        </Section>
+
+        <Section icon={<Cloud className="h-4 w-4" />} title="数据备份（GitHub）">
           <DataSync />
         </Section>
 
@@ -711,6 +718,82 @@ function DataSync() {
 
       {msg && <p className="text-sm text-green-600">{msg}</p>}
       {err && <p className="text-sm text-[#e07a5f]">{err}</p>}
+    </div>
+  );
+}
+
+/* ===== Supabase Config Component ===== */
+function SupabaseConfig() {
+  const { url: savedUrl, anonKey: savedAnon } = getSupabaseConfig();
+  const [url, setUrl] = useState(savedUrl);
+  const [anonKey, setAnonKey] = useState(savedAnon);
+  const [saved, setSaved] = useState(false);
+  const [showSql, setShowSql] = useState(false);
+  const ready = isSupabaseReady();
+
+  const save = () => {
+    setSupabaseConfig(url, anonKey);
+    setSaved(true);
+    setTimeout(() => { setSaved(false); window.location.reload(); }, 1000);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-xl bg-[#FFF0F5] p-3 text-xs text-[#8B3A5A]">
+        <Cloud className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p>配置 Supabase 后，家人在不同手机上发帖、上传教程都能实时同步。</p>
+          <p className="mt-1 text-[#B07090]">免费注册：supabase.com → New Project → 获取 URL 和 anon key</p>
+        </div>
+      </div>
+
+      {ready && (
+        <p className="flex items-center gap-1.5 text-sm text-green-600">
+          <Check className="h-4 w-4" /> Supabase 已连接，实时同步已开启
+        </p>
+      )}
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">Supabase URL</label>
+        <input
+          type="text"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          placeholder="https://xxx.supabase.co"
+          className="w-full rounded-xl border border-[#C45A7A]/15 bg-white/70 px-3 py-2 text-sm text-[#8B3A5A] outline-none focus:border-[#C45A7A]/40"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">Anon Key</label>
+        <input
+          type="text"
+          value={anonKey}
+          onChange={e => setAnonKey(e.target.value)}
+          placeholder="eyJhbGciOi..."
+          className="w-full rounded-xl border border-[#C45A7A]/15 bg-white/70 px-3 py-2 text-sm text-[#8B3A5A] outline-none focus:border-[#C45A7A]/40"
+        />
+      </div>
+
+      <button
+        onClick={save}
+        className="rounded-full bg-[#C45A7A] px-5 py-2 text-sm text-white hover:bg-[#A04068]"
+      >
+        {saved ? "已保存，正在刷新…" : "保存配置"}
+      </button>
+
+      <button
+        onClick={() => setShowSql(v => !v)}
+        className="block text-xs text-[#B07090] hover:text-[#8B3A5A]"
+      >
+        {showSql ? "隐藏" : "显示"} SQL 建表语句
+      </button>
+
+      {showSql && (
+        <pre className="max-h-60 overflow-auto rounded-xl bg-[#2D1B2D] p-3 text-[10px] leading-relaxed text-[#E8D5E8]">
+          {SQL_SCHEMA}
+        </pre>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { Tutorial, Step } from "../types";
+import { getSupabase, isSupabaseReady } from "./supabase";
 
 const KEY = "fth_user_tutorials";
 
@@ -7,7 +8,7 @@ export interface UserTutorial extends Tutorial {
   userId: string;
 }
 
-export function loadUserTutorials(): UserTutorial[] {
+export function loadUserTutorialsLocal(): UserTutorial[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return JSON.parse(raw);
@@ -15,24 +16,103 @@ export function loadUserTutorials(): UserTutorial[] {
   return [];
 }
 
-function saveUserTutorials(list: UserTutorial[]) {
+function saveUserTutorialsLocal(list: UserTutorial[]) {
   try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* quota */ }
 }
 
-export function getUserTutorial(id: string): UserTutorial | undefined {
-  return loadUserTutorials().find(t => t.id === id);
+function mapRow(row: any): UserTutorial {
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    coverPrompt: row.cover_prompt ?? "",
+    coverSize: row.cover_size ?? "landscape_16_9",
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    author: row.author,
+    authorRole: row.author_role ?? "家人",
+    avatarColor: row.avatar_color ?? "",
+    date: row.date ?? "",
+    intro: row.intro ?? "",
+    steps: Array.isArray(row.steps) ? row.steps : [],
+    comments: Array.isArray(row.comments) ? row.comments : [],
+    likes: row.likes ?? 0,
+    isUserCreated: true,
+    userId: row.user_id ?? "",
+  };
 }
 
-export function addUserTutorial(t: UserTutorial) {
-  const list = loadUserTutorials();
+function toRow(t: UserTutorial) {
+  return {
+    id: t.id,
+    user_id: t.userId,
+    title: t.title,
+    category: t.category,
+    cover_prompt: t.coverPrompt,
+    cover_size: t.coverSize,
+    tags: t.tags,
+    author: t.author,
+    author_role: t.authorRole,
+    avatar_color: t.avatarColor,
+    date: t.date,
+    intro: t.intro,
+    steps: t.steps,
+    comments: t.comments,
+    likes: t.likes ?? 0,
+  };
+}
+
+export async function loadUserTutorialsAsync(): Promise<UserTutorial[]> {
+  const sb = getSupabase();
+  if (sb && isSupabaseReady()) {
+    try {
+      const { data }: any = await sb.from("user_tutorials").select("*");
+      if (data) {
+        const mapped = data.map(mapRow);
+        saveUserTutorialsLocal(mapped);
+        return mapped;
+      }
+    } catch { /* fallback to local */ }
+  }
+  return loadUserTutorialsLocal();
+}
+
+export function loadUserTutorials(): UserTutorial[] {
+  return loadUserTutorialsLocal();
+}
+
+export async function syncUserTutorials(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb || !isSupabaseReady()) return;
+  try {
+    const { data }: any = await sb.from("user_tutorials").select("*");
+    if (data) saveUserTutorialsLocal(data.map(mapRow));
+  } catch { /* noop */ }
+}
+
+export function getUserTutorial(id: string): UserTutorial | undefined {
+  return loadUserTutorialsLocal().find(t => t.id === id);
+}
+
+export async function addUserTutorial(t: UserTutorial) {
+  const list = loadUserTutorialsLocal();
   const idx = list.findIndex(x => x.id === t.id);
   if (idx >= 0) list[idx] = t;
   else list.unshift(t);
-  saveUserTutorials(list);
+  saveUserTutorialsLocal(list);
+
+  const sb = getSupabase();
+  if (sb && isSupabaseReady()) {
+    try { await sb.from("user_tutorials").upsert(toRow(t)); } catch { /* noop */ }
+  }
 }
 
-export function deleteUserTutorial(id: string) {
-  saveUserTutorials(loadUserTutorials().filter(t => t.id !== id));
+export async function deleteUserTutorial(id: string) {
+  saveUserTutorialsLocal(loadUserTutorialsLocal().filter(t => t.id !== id));
+
+  const sb = getSupabase();
+  if (sb && isSupabaseReady()) {
+    try { await sb.from("user_tutorials").delete().eq("id", id); } catch { /* noop */ }
+  }
 }
 
 export function buildStepsFromDraft(draftSteps: { id: string; title: string; text: string; img: string | null; video: string | null }[]): Step[] {

@@ -5,10 +5,11 @@ import { Avatar } from "../components/Avatar";
 import { LogoMark } from "../components/Miffy";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
+import { getSupabase, isSupabaseReady } from "../lib/supabase";
 
 interface CirclePost {
   id: string;
-  userId: string;
+  user_id: string;
   authorName: string;
   authorColor: string;
   authorAvatar: string;
@@ -30,7 +31,7 @@ interface CircleComment {
 
 const KEY = "fth_circle_posts";
 
-function loadPosts(): CirclePost[] {
+function loadLocal(): CirclePost[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return JSON.parse(raw);
@@ -38,14 +39,44 @@ function loadPosts(): CirclePost[] {
   return [];
 }
 
-function savePosts(posts: CirclePost[]) {
+function saveLocal(posts: CirclePost[]) {
   try { localStorage.setItem(KEY, JSON.stringify(posts)); } catch { /* quota */ }
+}
+
+function mapRow(row: any): CirclePost {
+  return {
+    id: row.id,
+    user_id: row.user_id ?? "",
+    authorName: row.author_name ?? "",
+    authorColor: row.author_color ?? "",
+    authorAvatar: row.author_avatar ?? "",
+    text: row.text ?? "",
+    images: Array.isArray(row.images) ? row.images : [],
+    date: row.date ?? "",
+    likes: Array.isArray(row.likes) ? row.likes : [],
+    comments: Array.isArray(row.comments) ? row.comments : [],
+  };
+}
+
+function toRow(post: CirclePost) {
+  return {
+    id: post.id,
+    user_id: post.user_id,
+    author_name: post.authorName,
+    author_color: post.authorColor,
+    author_avatar: post.authorAvatar,
+    text: post.text,
+    images: post.images,
+    date: post.date,
+    likes: post.likes,
+    comments: post.comments,
+  };
 }
 
 export function Circle() {
   const { user } = useAuth();
   const { settings } = useSettings();
-  const [posts, setPosts] = useState<CirclePost[]>(loadPosts);
+  const [posts, setPosts] = useState<CirclePost[]>(loadLocal);
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
@@ -57,8 +88,52 @@ export function Circle() {
   const [adminPwd, setAdminPwd] = useState("");
   const [pwdError, setPwdError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const sb = getSupabase();
 
-  useEffect(() => { savePosts(posts); }, [posts]);
+  // load from Supabase + subscribe to real-time
+  useEffect(() => {
+    if (!sb || !isSupabaseReady()) return;
+
+    let mounted = true;
+
+    // initial load
+    sb.from("circle_posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data }: any) => {
+        if (!mounted || !data) return;
+        const mapped = data.map(mapRow);
+        setPosts(mapped);
+        saveLocal(mapped);
+      });
+
+    // subscribe to changes
+    const channel = sb
+      .channel("circle_posts_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "circle_posts" }, (payload: any) => {
+        setPosts(prev => {
+          if (payload.eventType === "INSERT") {
+            const newRow = mapRow(payload.new);
+            if (prev.some(p => p.id === newRow.id)) return prev;
+            return [newRow, ...prev];
+          }
+          if (payload.eventType === "UPDATE") {
+            const updated = mapRow(payload.new);
+            return prev.map(p => p.id === updated.id ? updated : p);
+          }
+          if (payload.eventType === "DELETE") {
+            return prev.filter(p => p.id !== payload.old.id);
+          }
+          return prev;
+        });
+      })
+      .subscribe();
+
+    return () => { mounted = false; sb.removeChannel(channel); };
+  }, [sb]);
+
+  // save to localStorage whenever posts change
+  useEffect(() => { saveLocal(posts); }, [posts]);
 
   const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -81,13 +156,13 @@ export function Circle() {
     setImages(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const publish = () => {
+  const publish = async () => {
     if (!user) return;
     if (!text.trim() && images.length === 0) return;
 
     const post: CirclePost = {
       id: `p-${Date.now()}`,
-      userId: user.id,
+      user_id: user.id,
       authorName: user.name,
       authorColor: user.avatarColor,
       authorAvatar: user.avatar,
@@ -97,9 +172,14 @@ export function Circle() {
       likes: [],
       comments: [],
     };
+
     setPosts(prev => [post, ...prev]);
     setText("");
     setImages([]);
+
+    if (sb) {
+      try { await sb.from("circle_posts").insert(toRow(post)); } catch { /* noop */ }
+    }
   };
 
   const toggleLike = (postId: string) => {
@@ -112,6 +192,15 @@ export function Circle() {
         likes: liked ? p.likes.filter(id => id !== user.id) : [...p.likes, user.id],
       };
     }));
+
+    if (sb) {
+      const target = posts.find(p => p.id === postId);
+      if (target) {
+        const liked = target.likes.includes(user.id);
+        const newLikes = liked ? target.likes.filter(id => id !== user.id) : [...target.likes, user.id];
+        sb.from("circle_posts").update({ likes: newLikes }).eq("id", postId).then(() => {});
+      }
+    }
   };
 
   const sendComment = (postId: string) => {
@@ -130,6 +219,13 @@ export function Circle() {
       p.id === postId ? { ...p, comments: [...p.comments, comment] } : p
     ));
     setCommentText(prev => ({ ...prev, [postId]: "" }));
+
+    if (sb) {
+      const target = posts.find(p => p.id === postId);
+      if (target) {
+        sb.from("circle_posts").update({ comments: [...target.comments, comment] }).eq("id", postId).then(() => {});
+      }
+    }
   };
 
   const startEdit = (post: CirclePost) => {
@@ -142,11 +238,15 @@ export function Circle() {
       p.id === postId ? { ...p, text: editText.trim() } : p
     ));
     setEditingId(null);
+
+    if (sb) {
+      sb.from("circle_posts").update({ text: editText.trim() }).eq("id", postId).then(() => {});
+    }
   };
 
   const requestDelete = (post: CirclePost) => {
     setDeleteTarget(post.id);
-    setDeleteIsOwn(!!user && user.id === post.userId);
+    setDeleteIsOwn(!!user && user.id === post.user_id);
     setAdminPwd("");
     setPwdError(false);
   };
@@ -158,6 +258,9 @@ export function Circle() {
       return;
     }
     setPosts(prev => prev.filter(p => p.id !== deleteTarget));
+    if (sb) {
+      sb.from("circle_posts").delete().eq("id", deleteTarget).then(() => {});
+    }
     setDeleteTarget(null);
   };
 
@@ -260,7 +363,7 @@ export function Circle() {
                   <p className="text-sm font-medium text-ink">{post.authorName}</p>
                   <p className="text-xs text-ink-muted">{post.date}</p>
                 </div>
-                {user && user.id === post.userId && (
+                {user && user.id === post.user_id && (
                   <button
                     onClick={() => startEdit(post)}
                     className="rounded-full p-1.5 text-ink-muted transition hover:bg-cream-200 hover:text-miffy"

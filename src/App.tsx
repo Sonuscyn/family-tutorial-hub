@@ -1,8 +1,11 @@
+import { useEffect } from "react";
 import { Routes, Route, Outlet } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { SettingsProvider } from "./lib/settings";
 import { AuthProvider } from "./lib/auth";
+import { syncUserTutorials } from "./lib/tutorialStore";
+import { isSupabaseReady } from "./lib/supabase";
 import { Landing } from "./pages/Landing";
 import { Home } from "./pages/Home";
 import { Category } from "./pages/Category";
@@ -26,6 +29,12 @@ function Layout() {
 }
 
 export default function App() {
+  useEffect(() => {
+    if (isSupabaseReady()) {
+      syncUserTutorials();
+    }
+  }, []);
+
   return (
     <SettingsProvider>
       <AuthProvider>
