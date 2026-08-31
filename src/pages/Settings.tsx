@@ -21,10 +21,10 @@ import {
   getSupabaseConfig, setSupabaseConfig, isSupabaseReady, SQL_SCHEMA,
 } from "../lib/supabase";
 import {
-  isQiniuReady, startQiniuSync, stopQiniuSync,
-  getAK, getSK, getBucket, getDomain,
-  setQiniuConfig, clearQiniuConfig,
-} from "../lib/qiniuSync";
+  isGiteeReady, startGiteeSync, stopGiteeSync,
+  getToken as getGiteeToken, getOwner, getRepo,
+  setGiteeConfig, clearGiteeConfig,
+} from "../lib/giteeSync";
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -354,8 +354,8 @@ export function Settings() {
           <SupabaseConfig />
         </Section>
 
-        <Section icon={<Cloud className="h-4 w-4" />} title="实时同步（七牛云）">
-          <QiniuSyncConfig />
+        <Section icon={<Cloud className="h-4 w-4" />} title="实时同步（Gitee）">
+          <GiteeSyncConfig />
         </Section>
 
         <Section icon={<Cloud className="h-4 w-4" />} title="手动备份（GitHub）">
@@ -807,33 +807,31 @@ function SupabaseConfig() {
   );
 }
 
-/* ===== Qiniu Sync Config ===== */
-function QiniuSyncConfig() {
-  const [ak, setAk] = useState(getAK());
-  const [sk, setSk] = useState(getSK());
-  const [bucket, setBucket] = useState(getBucket());
-  const [domain, setDomain] = useState(getDomain());
-  const [running, setRunning] = useState(isQiniuReady());
+/* ===== Gitee Sync Config ===== */
+function GiteeSyncConfig() {
+  const [owner, setOwner] = useState(getOwner());
+  const [repo, setRepo] = useState(getRepo());
+  const [token, setToken] = useState(getGiteeToken());
+  const [running, setRunning] = useState(isGiteeReady());
   const [msg, setMsg] = useState("");
 
   const inputCls = "w-full rounded-xl border border-[#C45A7A]/15 bg-white/70 px-3 py-2 text-sm text-[#8B3A5A] outline-none focus:border-[#C45A7A]/40";
 
   const save = () => {
-    setQiniuConfig(ak.trim(), sk.trim(), bucket.trim(), domain.trim());
-    startQiniuSync();
+    setGiteeConfig(owner.trim(), repo.trim(), token.trim());
+    startGiteeSync();
     setRunning(true);
     setMsg("配置已保存，实时同步已开启 ✓");
     setTimeout(() => setMsg(""), 3000);
   };
 
   const clear = () => {
-    clearQiniuConfig();
-    stopQiniuSync();
+    clearGiteeConfig();
+    stopGiteeSync();
     setRunning(false);
-    setAk("");
-    setSk("");
-    setBucket("");
-    setDomain("");
+    setOwner("");
+    setRepo("");
+    setToken("");
     setMsg("配置已清除，同步已停止");
     setTimeout(() => setMsg(""), 3000);
   };
@@ -843,59 +841,48 @@ function QiniuSyncConfig() {
       <div className="flex items-start gap-2 rounded-xl bg-[#FFF0F5] p-3 text-xs text-[#8B3A5A]">
         <Cloud className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <p>七牛云免费 10GB 存储，30 秒同步一次，国内直连速度快。</p>
+          <p>Gitee 是中国版 GitHub，免费、不用实名、国内直连速度快，30 秒同步一次。</p>
           <p className="mt-1 text-[#B07090]">
-            注册：https://www.qiniu.com → 完成实名认证 → 创建公开空间（Bucket） → 在「密钥管理」获取 AK / SK。
+            注册步骤：1. 打开 https://gitee.com 注册账号 2. 创建一个公开仓库 3. 设置 → 私人令牌 → 生成新令牌（勾选 projects）。
           </p>
         </div>
       </div>
 
       {running && (
         <p className="flex items-center gap-1.5 text-sm text-green-600">
-          <Check className="h-4 w-4" /> 实时同步已开启 · 每 30 秒自动同步
+          <Check className="h-4 w-4" /> 实时同步已开启 · 每30秒自动同步
         </p>
       )}
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">AccessKey (AK)</label>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">Gitee 用户名</label>
         <input
           type="text"
-          value={ak}
-          onChange={e => setAk(e.target.value)}
-          placeholder="七牛云 AccessKey"
+          value={owner}
+          onChange={e => setOwner(e.target.value)}
+          placeholder="你的 Gitee 用户名"
           className={inputCls}
         />
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">SecretKey (SK)</label>
-        <input
-          type="password"
-          value={sk}
-          onChange={e => setSk(e.target.value)}
-          placeholder="七牛云 SecretKey"
-          className={inputCls}
-        />
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">空间名称（Bucket）</label>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">仓库名</label>
         <input
           type="text"
-          value={bucket}
-          onChange={e => setBucket(e.target.value)}
+          value={repo}
+          onChange={e => setRepo(e.target.value)}
           placeholder="例如：family-tutorial"
           className={inputCls}
         />
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">绑定域名（Domain）</label>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">私人令牌</label>
         <input
-          type="text"
-          value={domain}
-          onChange={e => setDomain(e.target.value)}
-          placeholder="例如：https://cdn.example.com"
+          type="password"
+          value={token}
+          onChange={e => setToken(e.target.value)}
+          placeholder="Gitee 私人令牌"
           className={inputCls}
         />
       </div>
@@ -903,7 +890,7 @@ function QiniuSyncConfig() {
       <div className="flex gap-3">
         <button
           onClick={save}
-          disabled={!ak.trim() || !sk.trim() || !bucket.trim() || !domain.trim()}
+          disabled={!owner.trim() || !repo.trim() || !token.trim()}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#C45A7A] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#A04068] disabled:opacity-40"
         >
           <Cloud className="h-4 w-4" /> 保存并开启

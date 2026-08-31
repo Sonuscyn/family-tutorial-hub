@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { scheduleQiniuBackup as scheduleBackup } from "./qiniuSync";
+import { scheduleGiteeBackup as scheduleBackup } from "./giteeSync";
 
 export type CharacterType = "miffy" | "rilakkuma";
 export type DecorationType = "none" | "crown" | "heart" | "apple";

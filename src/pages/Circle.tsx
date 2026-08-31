@@ -6,7 +6,7 @@ import { LogoMark } from "../components/Miffy";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import { getSupabase, isSupabaseReady } from "../lib/supabase";
-import { scheduleQiniuBackup as scheduleBackup } from "../lib/qiniuSync";
+import { scheduleGiteeBackup as scheduleBackup } from "../lib/giteeSync";
 
 interface CirclePost {
   id: string;

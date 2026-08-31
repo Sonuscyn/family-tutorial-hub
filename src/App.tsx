@@ -6,7 +6,7 @@ import { SettingsProvider } from "./lib/settings";
 import { AuthProvider } from "./lib/auth";
 import { syncUserTutorials } from "./lib/tutorialStore";
 import { isSupabaseReady } from "./lib/supabase";
-import { startQiniuSync, stopQiniuSync, setSyncCallback, scheduleQiniuBackup, isQiniuReady } from "./lib/qiniuSync";
+import { startGiteeSync, stopGiteeSync, setSyncCallback, scheduleGiteeBackup, isGiteeReady } from "./lib/giteeSync";
 import { Landing } from "./pages/Landing";
 import { Home } from "./pages/Home";
 import { Category } from "./pages/Category";
@@ -38,14 +38,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isQiniuReady()) {
+    if (isGiteeReady()) {
       setSyncCallback(onSync);
-      startQiniuSync();
+      startGiteeSync();
     }
     if (isSupabaseReady()) {
       syncUserTutorials();
     }
-    return () => stopQiniuSync();
+    return () => stopGiteeSync();
   }, []);
 
   // re-read on sync tick
