@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
@@ -24,6 +24,14 @@ export function Home() {
   const q = params.get("q")?.trim() ?? "";
   const [category, setCategory] = useState(params.get("cat") ?? "全部");
   const [view, setView] = useState<"card" | "timeline">("card");
+  const [syncTick, setSyncTick] = useState(0);
+
+  // listen for data synced from other devices
+  useEffect(() => {
+    const onSync = () => setSyncTick(t => t + 1);
+    window.addEventListener("fth-data-synced", onSync);
+    return () => window.removeEventListener("fth-data-synced", onSync);
+  }, []);
 
   const allCategories = useMemo(
     () => [...categories, ...settings.customCategories.map(c => c.name)],
@@ -32,7 +40,8 @@ export function Home() {
 
   const allTutorials = useMemo(
     () => [...loadUserTutorials(), ...tutorials] as Tutorial[],
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [syncTick],
   );
 
   const newest = useMemo(
@@ -92,7 +101,7 @@ export function Home() {
       )}
 
       {/* ===== Smart Recommendations ===== */}
-      {!q && category === "全部" && (
+      {!q && category === "全部" && allTutorials.length > 0 && (
         <section className="mb-8 grid gap-4 sm:grid-cols-2">
           <RecommendCard tutorial={newest} label="最新更新" icon={Clock} />
           <RecommendCard tutorial={mostLiked} label="最多收藏" icon={Flame} />
@@ -157,10 +166,11 @@ function RecommendCard({
   label,
   icon: Icon,
 }: {
-  tutorial: Tutorial;
+  tutorial: Tutorial | undefined;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
+  if (!tutorial) return null;
   return (
     <Link
       to={`/tutorial/${tutorial.id}`}
