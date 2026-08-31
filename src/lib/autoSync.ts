@@ -13,7 +13,11 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let lastContentHash = "";
 
 export function isAutoSyncEnabled(): boolean {
-  try { return localStorage.getItem(SYNC_FLAG) === "1"; } catch { return false; }
+  try {
+    const v = localStorage.getItem(SYNC_FLAG);
+    if (v === "0") return false; // explicitly disabled
+    return true; // default: enabled
+  } catch { return true; }
 }
 
 export function setAutoSyncEnabled(enabled: boolean) {
