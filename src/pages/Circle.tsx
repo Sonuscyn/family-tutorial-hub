@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Heart, MessageCircle, Send, ImagePlus, X, Edit3, Trash2, Check } from "lucide-react";
+import { Heart, MessageCircle, Send, ImagePlus, X, Edit3, Trash2, Check, ShieldAlert } from "lucide-react";
 import { Avatar } from "../components/Avatar";
 import { LogoMark } from "../components/Miffy";
 import { useAuth } from "../lib/auth";
+import { useSettings } from "../lib/settings";
 
 interface CirclePost {
   id: string;
@@ -43,6 +44,7 @@ function savePosts(posts: CirclePost[]) {
 
 export function Circle() {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [posts, setPosts] = useState<CirclePost[]>(loadPosts);
   const [text, setText] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -51,6 +53,9 @@ export function Circle() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteIsOwn, setDeleteIsOwn] = useState(false);
+  const [adminPwd, setAdminPwd] = useState("");
+  const [pwdError, setPwdError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { savePosts(posts); }, [posts]);
@@ -139,8 +144,19 @@ export function Circle() {
     setEditingId(null);
   };
 
+  const requestDelete = (post: CirclePost) => {
+    setDeleteTarget(post.id);
+    setDeleteIsOwn(!!user && user.id === post.userId);
+    setAdminPwd("");
+    setPwdError(false);
+  };
+
   const confirmDelete = () => {
     if (!deleteTarget) return;
+    if (!deleteIsOwn && adminPwd !== settings.password) {
+      setPwdError(true);
+      return;
+    }
     setPosts(prev => prev.filter(p => p.id !== deleteTarget));
     setDeleteTarget(null);
   };
@@ -245,20 +261,20 @@ export function Circle() {
                   <p className="text-xs text-ink-muted">{post.date}</p>
                 </div>
                 {user && user.id === post.userId && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => startEdit(post)}
-                      className="rounded-full p-1.5 text-ink-muted transition hover:bg-cream-200 hover:text-miffy"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(post.id)}
-                      className="rounded-full p-1.5 text-ink-muted transition hover:bg-cream-200 hover:text-[#e07a5f]"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => startEdit(post)}
+                    className="rounded-full p-1.5 text-ink-muted transition hover:bg-cream-200 hover:text-miffy"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {user && (
+                  <button
+                    onClick={() => requestDelete(post)}
+                    className="rounded-full p-1.5 text-ink-muted transition hover:bg-cream-200 hover:text-[#e07a5f]"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
 
@@ -372,14 +388,37 @@ export function Circle() {
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm">
           <div className="glass w-full max-w-xs rounded-3xl p-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#e07a5f]/10">
-              <Trash2 className="h-7 w-7 text-[#e07a5f]" />
+            <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full ${
+              deleteIsOwn ? "bg-[#e07a5f]/10" : "bg-[#C45A7A]/10"
+            }`}>
+              {deleteIsOwn ? (
+                <Trash2 className="h-7 w-7 text-[#e07a5f]" />
+              ) : (
+                <ShieldAlert className="h-7 w-7 text-[#C45A7A]" />
+              )}
             </div>
-            <p className="text-lg font-bold text-ink">删除这条动态？</p>
-            <p className="mt-1 text-sm text-ink-muted">删除后不能恢复哦</p>
+            <p className="text-lg font-bold text-ink">
+              {deleteIsOwn ? "删除这条动态？" : "管理员删除"}
+            </p>
+            <p className="mt-1 text-sm text-ink-muted">
+              {deleteIsOwn ? "删除后不能恢复哦" : "删除别人的动态需要管理员密码"}
+            </p>
+            {!deleteIsOwn && (
+              <div className="mt-4">
+                <input
+                  type="password"
+                  value={adminPwd}
+                  onChange={e => { setAdminPwd(e.target.value); setPwdError(false); }}
+                  placeholder="输入管理员密码"
+                  className="field text-center text-sm"
+                  autoFocus
+                />
+                {pwdError && <p className="mt-1.5 text-xs text-[#e07a5f]">管理员密码不对</p>}
+              </div>
+            )}
             <div className="mt-5 flex gap-3">
               <button
-                onClick={() => setDeleteTarget(null)}
+                onClick={() => { setDeleteTarget(null); setAdminPwd(""); setPwdError(false); }}
                 className="btn-ghost flex-1 justify-center"
               >
                 取消
