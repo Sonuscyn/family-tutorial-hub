@@ -1,6 +1,6 @@
 import type { Tutorial, Step } from "../types";
 import { getSupabase, isSupabaseReady } from "./supabase";
-import { scheduleBackup } from "./autoSync";
+import { scheduleLeanBackup as scheduleBackup } from "./leanSync";
 
 const KEY = "fth_user_tutorials";
 

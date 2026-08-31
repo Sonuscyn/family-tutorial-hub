@@ -6,7 +6,7 @@ import { LogoMark } from "../components/Miffy";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import { getSupabase, isSupabaseReady } from "../lib/supabase";
-import { scheduleBackup } from "../lib/autoSync";
+import { scheduleLeanBackup as scheduleBackup } from "../lib/leanSync";
 
 interface CirclePost {
   id: string;

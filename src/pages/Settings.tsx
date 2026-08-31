@@ -21,8 +21,10 @@ import {
   getSupabaseConfig, setSupabaseConfig, isSupabaseReady, SQL_SCHEMA,
 } from "../lib/supabase";
 import {
-  isAutoSyncEnabled, setAutoSyncEnabled, startAutoSync, stopAutoSync,
-} from "../lib/autoSync";
+  isLeanReady, startLeanSync, stopLeanSync,
+  getLeanId, getLeanKey, getLeanServer,
+  setLeanConfig, clearLeanConfig,
+} from "../lib/leanSync";
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -352,8 +354,8 @@ export function Settings() {
           <SupabaseConfig />
         </Section>
 
-        <Section icon={<Cloud className="h-4 w-4" />} title="自动同步（GitHub）">
-          <AutoSyncToggle />
+        <Section icon={<Cloud className="h-4 w-4" />} title="实时同步（LeanCloud）">
+          <LeanSyncConfig />
         </Section>
 
         <Section icon={<Cloud className="h-4 w-4" />} title="手动备份（GitHub）">
@@ -805,52 +807,102 @@ function SupabaseConfig() {
   );
 }
 
-/* ===== Auto Sync Toggle ===== */
-function AutoSyncToggle() {
-  const [enabled, setEnabled] = useState(isAutoSyncEnabled());
-  const tokenReady = hasToken();
+/* ===== LeanCloud Sync Config ===== */
+function LeanSyncConfig() {
+  const [appId, setAppId] = useState(getLeanId());
+  const [appKey, setAppKey] = useState(getLeanKey());
+  const [server, setServer] = useState(getLeanServer());
+  const [running, setRunning] = useState(isLeanReady());
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
-  const toggle = () => {
-    const next = !enabled;
-    setEnabled(next);
-    setAutoSyncEnabled(next);
-    if (next && tokenReady) {
-      startAutoSync();
-    } else {
-      stopAutoSync();
+  const handleSave = () => {
+    setError("");
+    if (!appId.trim() || !appKey.trim()) {
+      setError("App ID 和 App Key 都不能为空");
+      return;
     }
+    setLeanConfig(appId.trim(), appKey.trim(), server.trim());
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    setRunning(true);
+    startLeanSync();
+  };
+
+  const handleClear = () => {
+    clearLeanConfig();
+    setAppId(""); setAppKey(""); setServer("");
+    setRunning(false);
+    stopLeanSync();
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-xl bg-[#FFF0F5] p-3 text-xs text-[#8B3A5A]">
         <Cloud className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <p>开启后，家人在不同手机上发的动态、教程会自动同步（约12秒延迟）。</p>
-          <p className="mt-1 text-[#B07090]">需要先在下方"手动备份"里填写 GitHub Token。</p>
+          <p>配置后，家人在不同手机上发的动态、教程、设置会自动实时同步（30秒检查一次，国内可直连）。</p>
+          <p className="mt-1 text-[#B07090]">
+            注册 LeanCloud：打开 https://leancloud.cn 注册 → 创建应用 →
+            设置 → 应用凭证 → 复制 AppID、AppKey、服务器地址
+          </p>
         </div>
       </div>
 
-      {!tokenReady && (
-        <p className="text-sm text-[#e07a5f]">请先在"手动备份"板块填写 GitHub Token</p>
-      )}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">App ID</label>
+        <input
+          value={appId}
+          onChange={(e) => setAppId(e.target.value)}
+          placeholder="如 kPXXX..."
+          className="field text-sm"
+        />
+      </div>
 
-      <button
-        onClick={toggle}
-        disabled={!tokenReady}
-        className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition disabled:opacity-40 ${
-          enabled
-            ? "bg-green-500 text-white hover:bg-green-600"
-            : "bg-[#C45A7A]/10 text-[#C45A7A] hover:bg-[#C45A7A]/20"
-        }`}
-      >
-        <Check className={`h-4 w-4 ${enabled ? "" : "opacity-0"}`} />
-        {enabled ? "自动同步已开启" : "开启自动同步"}
-      </button>
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">App Key</label>
+        <input
+          value={appKey}
+          onChange={(e) => setAppKey(e.target.value)}
+          placeholder="如 9VXXX..."
+          className="field text-sm"
+        />
+      </div>
 
-      {enabled && tokenReady && (
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-[#8B3A5A]">服务器地址（可选）</label>
+        <input
+          value={server}
+          onChange={(e) => setServer(e.target.value)}
+          placeholder="如 https://xxx.lc-ea.shared.com"
+          className="field text-sm"
+        />
+        <p className="mt-1 text-xs text-[#B07090]">国内节点填 https://xxx.lc-ea.shared.com；海外节点可留空</p>
+      </div>
+
+      {error && <p className="text-sm text-[#e07a5f]">{error}</p>}
+      {saved && <p className="text-sm text-green-600">已保存并开启同步</p>}
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          className="flex items-center gap-2 rounded-full bg-[#C45A7A] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#A0486A]"
+        >
+          <Check className="h-4 w-4" /> 保存并开启
+        </button>
+        {running && (
+          <button
+            onClick={handleClear}
+            className="flex items-center gap-2 rounded-full bg-[#e07a5f]/10 px-5 py-2.5 text-sm font-medium text-[#e07a5f] transition hover:bg-[#e07a5f]/20"
+          >
+            <X className="h-4 w-4" /> 清除配置
+          </button>
+        )}
+      </div>
+
+      {running && (
         <p className="text-xs text-green-600">
-          ✓ 每次有新动态/教程/家人变更，3秒后自动备份。每12秒检查一次是否有别人的更新。
+          同步已开启 · 每30秒检查更新 · 有改动3秒后自动推送
         </p>
       )}
     </div>

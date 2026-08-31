@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { getSupabase, isSupabaseReady } from "./supabase";
-import { scheduleBackup } from "./autoSync";
+import { scheduleLeanBackup as scheduleBackup } from "./leanSync";
 
 export interface FamilyUser {
   id: string;
