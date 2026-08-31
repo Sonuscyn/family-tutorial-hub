@@ -1,5 +1,6 @@
 import type { Tutorial, Step } from "../types";
 import { getSupabase, isSupabaseReady } from "./supabase";
+import { scheduleBackup } from "./autoSync";
 
 const KEY = "fth_user_tutorials";
 
@@ -99,6 +100,7 @@ export async function addUserTutorial(t: UserTutorial) {
   if (idx >= 0) list[idx] = t;
   else list.unshift(t);
   saveUserTutorialsLocal(list);
+  scheduleBackup();
 
   const sb = getSupabase();
   if (sb && isSupabaseReady()) {
@@ -108,6 +110,7 @@ export async function addUserTutorial(t: UserTutorial) {
 
 export async function deleteUserTutorial(id: string) {
   saveUserTutorialsLocal(loadUserTutorialsLocal().filter(t => t.id !== id));
+  scheduleBackup();
 
   const sb = getSupabase();
   if (sb && isSupabaseReady()) {

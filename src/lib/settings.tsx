@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { scheduleBackup } from "./autoSync";
 
 export type CharacterType = "miffy" | "rilakkuma";
 export type DecorationType = "none" | "crown" | "heart" | "apple";
@@ -185,6 +186,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
+    scheduleBackup();
   };
 
   const reset = () => {

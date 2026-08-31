@@ -6,6 +6,7 @@ import { LogoMark } from "../components/Miffy";
 import { useAuth } from "../lib/auth";
 import { useSettings } from "../lib/settings";
 import { getSupabase, isSupabaseReady } from "../lib/supabase";
+import { scheduleBackup } from "../lib/autoSync";
 
 interface CirclePost {
   id: string;
@@ -136,6 +137,23 @@ export function Circle() {
 
   // save to localStorage whenever posts change
   useEffect(() => { saveLocal(posts); }, [posts]);
+
+  // schedule backup after posts change (but not on initial load from remote)
+  const initialLoad = useRef(true);
+  useEffect(() => {
+    if (initialLoad.current) { initialLoad.current = false; return; }
+    scheduleBackup();
+  }, [posts]);
+
+  // listen for data synced from other devices
+  useEffect(() => {
+    const onSync = () => {
+      const fresh = loadLocal();
+      setPosts(fresh);
+    };
+    window.addEventListener("fth-data-synced", onSync);
+    return () => window.removeEventListener("fth-data-synced", onSync);
+  }, []);
 
   const fileToDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
     const r = new FileReader();

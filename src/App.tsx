@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Routes, Route, Outlet } from "react-router-dom";
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
@@ -6,6 +6,11 @@ import { SettingsProvider } from "./lib/settings";
 import { AuthProvider } from "./lib/auth";
 import { syncUserTutorials } from "./lib/tutorialStore";
 import { isSupabaseReady } from "./lib/supabase";
+import {
+  startAutoSync, stopAutoSync, setSyncCallback, scheduleBackup,
+  isAutoSyncEnabled,
+} from "./lib/autoSync";
+import { hasToken } from "./lib/githubSync";
 import { Landing } from "./pages/Landing";
 import { Home } from "./pages/Home";
 import { Category } from "./pages/Category";
@@ -29,11 +34,31 @@ function Layout() {
 }
 
 export default function App() {
+  const [syncTick, setSyncTick] = useState(0);
+
+  const onSync = useCallback(() => {
+    // trigger re-render by incrementing tick
+    setSyncTick(t => t + 1);
+  }, []);
+
   useEffect(() => {
+    // start GitHub auto-sync if token exists and enabled
+    if (hasToken() && isAutoSyncEnabled()) {
+      setSyncCallback(onSync);
+      startAutoSync();
+    }
     if (isSupabaseReady()) {
       syncUserTutorials();
     }
+    return () => stopAutoSync();
   }, []);
+
+  // re-read on sync tick
+  useEffect(() => {
+    if (syncTick > 0) {
+      syncUserTutorials();
+    }
+  }, [syncTick]);
 
   return (
     <SettingsProvider>

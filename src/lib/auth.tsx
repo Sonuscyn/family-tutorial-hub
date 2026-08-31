@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { getSupabase, isSupabaseReady } from "./supabase";
+import { scheduleBackup } from "./autoSync";
 
 export interface FamilyUser {
   id: string;
@@ -131,6 +132,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { mounted = false; sb.removeChannel(channel); };
   }, [sb]);
 
+  // listen for GitHub auto-sync events
+  useEffect(() => {
+    const onSync = () => {
+      const fresh = loadLocal();
+      setUsers(fresh);
+      const cid = loadCurrentId();
+      if (cid) {
+        const found = fresh.find(u => u.id === cid);
+        if (found) setUser(found);
+      }
+    };
+    window.addEventListener("fth-data-synced", onSync);
+    return () => window.removeEventListener("fth-data-synced", onSync);
+  }, []);
+
   const register: AuthContextValue["register"] = (name, password, avatarColor) => {
     if (!name.trim()) return { ok: false, error: "请输入名字" };
     if (password.length < 3) return { ok: false, error: "密码至少 3 位" };
@@ -153,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsers(next);
     saveCurrentId(newUser.id);
     setUser(newUser);
+    scheduleBackup();
 
     if (sb) {
       sb.from("members").insert(toRow(newUser)).then(() => {});
@@ -183,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveLocal(next);
     setUsers(next);
     setUser(updated);
+    scheduleBackup();
 
     if (sb) {
       sb.from("members").update(toRow(updated)).eq("id", updated.id).then(() => {});
@@ -195,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveLocal(next);
     setUsers(next);
     if (user?.id === id) { saveCurrentId(null); setUser(null); }
+    scheduleBackup();
 
     if (sb) {
       sb.from("members").delete().eq("id", id).then(() => {});

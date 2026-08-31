@@ -20,6 +20,9 @@ import {
 import {
   getSupabaseConfig, setSupabaseConfig, isSupabaseReady, SQL_SCHEMA,
 } from "../lib/supabase";
+import {
+  isAutoSyncEnabled, setAutoSyncEnabled, startAutoSync, stopAutoSync,
+} from "../lib/autoSync";
 
 export function Settings() {
   const { settings, update, reset } = useSettings();
@@ -349,7 +352,11 @@ export function Settings() {
           <SupabaseConfig />
         </Section>
 
-        <Section icon={<Cloud className="h-4 w-4" />} title="数据备份（GitHub）">
+        <Section icon={<Cloud className="h-4 w-4" />} title="自动同步（GitHub）">
+          <AutoSyncToggle />
+        </Section>
+
+        <Section icon={<Cloud className="h-4 w-4" />} title="手动备份（GitHub）">
           <DataSync />
         </Section>
 
@@ -793,6 +800,58 @@ function SupabaseConfig() {
         <pre className="max-h-60 overflow-auto rounded-xl bg-[#2D1B2D] p-3 text-[10px] leading-relaxed text-[#E8D5E8]">
           {SQL_SCHEMA}
         </pre>
+      )}
+    </div>
+  );
+}
+
+/* ===== Auto Sync Toggle ===== */
+function AutoSyncToggle() {
+  const [enabled, setEnabled] = useState(isAutoSyncEnabled());
+  const tokenReady = hasToken();
+
+  const toggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    setAutoSyncEnabled(next);
+    if (next && tokenReady) {
+      startAutoSync();
+    } else {
+      stopAutoSync();
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2 rounded-xl bg-[#FFF0F5] p-3 text-xs text-[#8B3A5A]">
+        <Cloud className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p>开启后，家人在不同手机上发的动态、教程会自动同步（约12秒延迟）。</p>
+          <p className="mt-1 text-[#B07090]">需要先在下方"手动备份"里填写 GitHub Token。</p>
+        </div>
+      </div>
+
+      {!tokenReady && (
+        <p className="text-sm text-[#e07a5f]">请先在"手动备份"板块填写 GitHub Token</p>
+      )}
+
+      <button
+        onClick={toggle}
+        disabled={!tokenReady}
+        className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition disabled:opacity-40 ${
+          enabled
+            ? "bg-green-500 text-white hover:bg-green-600"
+            : "bg-[#C45A7A]/10 text-[#C45A7A] hover:bg-[#C45A7A]/20"
+        }`}
+      >
+        <Check className={`h-4 w-4 ${enabled ? "" : "opacity-0"}`} />
+        {enabled ? "自动同步已开启" : "开启自动同步"}
+      </button>
+
+      {enabled && tokenReady && (
+        <p className="text-xs text-green-600">
+          ✓ 每次有新动态/教程/家人变更，3秒后自动备份。每12秒检查一次是否有别人的更新。
+        </p>
       )}
     </div>
   );
